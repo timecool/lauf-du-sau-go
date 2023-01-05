@@ -10,6 +10,7 @@ import (
 	"lauf-du-sau/service"
 	"lauf-du-sau/utils"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 )
@@ -57,7 +58,7 @@ func CreateRun(c *gin.Context) {
 		return
 	}
 
-	run := models.Run{UUID: uuid.New().String(), Distance: distance, Time: runTime, Date: time.Unix(timestamp, 0), CreateAt: time.Now(), Url: filePath}
+	run := models.Run{UUID: uuid.New().String(), Distance: distance, Time: runTime, Date: time.Unix(timestamp, 0), CreateAt: time.Now(), Url: os.Getenv("IMAGE_PATH") + filePath}
 
 	userCollection := database.InitUserCollection()
 	fmt.Println(run)
