@@ -4,7 +4,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"lauf-du-sau/database"
+	"lauf-du-sau/models"
 	"net/http"
+	"os"
 )
 
 func Leaderboard(c *gin.Context) {
@@ -14,8 +16,11 @@ func Leaderboard(c *gin.Context) {
 	}
 	o2 := bson.M{
 		"$group": bson.M{
-			"_id":   "$_id",
-			"total": bson.M{"$sum": "$runs.distance"},
+			"_id":       "$_id",
+			"username":  bson.M{"$first": "$username"},
+			"email":     bson.M{"$first": "$email"},
+			"image_url": bson.M{"$first": "$image_url"},
+			"total":     bson.M{"$sum": "$runs.distance"},
 		},
 	}
 
@@ -26,7 +31,7 @@ func Leaderboard(c *gin.Context) {
 		return
 	}
 
-	var results []bson.M
+	var results []models.LeaderboardUser
 	if err = cursor.All(database.Ctx, &results); err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
@@ -34,6 +39,12 @@ func Leaderboard(c *gin.Context) {
 	if err := cursor.Close(database.Ctx); err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
+	}
+	for index, element := range results {
+		if element.ImageUrl != "" {
+			results[index].ImageUrl = os.Getenv("IMAGE_PATH") + element.ImageUrl
+
+		}
 	}
 
 	c.JSON(http.StatusOK, results)

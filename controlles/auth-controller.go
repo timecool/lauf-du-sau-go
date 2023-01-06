@@ -19,6 +19,11 @@ func Register(c *gin.Context) {
 		return
 	}
 
+	if user.Email != "" && user.Username != "" && user.Password != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Please fill all fields"})
+		return
+	}
+
 	userConnection := database.InitUserCollection()
 	_, isEmailSet, _ := service.GetUserByEmail(user.Email, userConnection)
 	if isEmailSet {

@@ -26,3 +26,11 @@ const (
 	RoleMember Role = "member"
 	RoleNone   Role = "none"
 )
+
+type LeaderboardUser struct {
+	UUID     string  `json:"uuid" bson:"_id, omitempty"`
+	Email    string  `json:"email" bson:"email, omitempty"`
+	Username string  `json:"username" bson:"username, omitempty"`
+	Total    float64 `json:"total" bson:"total, omitempty"`
+	ImageUrl string  `json:"image_url" bson:"image_url"`
+}

@@ -31,5 +31,6 @@ func Setup(router *gin.Engine) {
 
 	router.GET("/test", controlles.TestApi)
 	router.Static("/uploads", "./uploads")
+	router.Static("/profile", "./profile")
 
 }
