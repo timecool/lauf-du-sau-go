@@ -32,6 +32,7 @@ func Register(c *gin.Context) {
 	user.UserRole = models.RoleNone
 	// create uuid
 	user.UUID = uuid.New().String()
+	user.Runs = []models.Run{}
 
 	// save user in collection
 	if _, err2 := userConnection.InsertOne(database.Ctx, user); err2 != nil {

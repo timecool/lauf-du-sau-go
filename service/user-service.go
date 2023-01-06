@@ -6,9 +6,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"io"
 	"lauf-du-sau/database"
 	"lauf-du-sau/models"
+	"mime/multipart"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -16,6 +19,13 @@ func GetUserByEmail(email string, usersCollection *mongo.Collection) (models.Use
 	var user models.User
 	// find user with email
 	err := usersCollection.FindOne(database.Ctx, bson.M{"email": email}).Decode(&user)
+
+	return user, len(user.UUID) != 0, err
+}
+func GetUserByUsername(username string, usersCollection *mongo.Collection) (models.User, bool, error) {
+	var user models.User
+	// find user with email
+	err := usersCollection.FindOne(database.Ctx, bson.M{"username": username}).Decode(&user)
 
 	return user, len(user.UUID) != 0, err
 }
@@ -28,7 +38,11 @@ func GetUserById(id string, usersCollection *mongo.Collection) (models.User, boo
 }
 
 func UserToResultUser(user models.User) models.ReturnUser {
-	return models.ReturnUser{UUID: user.UUID, Email: user.Email}
+	newUser := models.ReturnUser{UUID: user.UUID, Email: user.Email, Username: user.Username, Goal: user.Goal}
+	if user.ImageUrl != "" {
+		newUser.ImageUrl = os.Getenv("IMAGE_PATH") + user.ImageUrl
+	}
+	return newUser
 }
 
 func CreateToken(user models.User) (string, error) {
@@ -123,4 +137,22 @@ func GetUserByToken(c *gin.Context) (string, error) {
 	fmt.Println("uuid" + uuid)
 	return uuid, err
 
+}
+
+func SaveProfileImage(header *multipart.FileHeader, file multipart.File, profileUuid string) (string, error) {
+
+	extension := filepath.Ext(header.Filename)
+	filename := profileUuid + extension
+	filePath := "profile/" + filename
+
+	out, err := os.Create(filePath)
+	if err != nil {
+		return "", err
+	}
+	defer out.Close()
+	_, err = io.Copy(out, file)
+	if err != nil {
+		return "", err
+	}
+	return filePath, nil
 }

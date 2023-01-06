@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"fmt"
 	"github.com/gin-gonic/gin"
 	"lauf-du-sau/models"
 	"lauf-du-sau/service"
@@ -9,16 +8,31 @@ import (
 )
 
 func Admin(c *gin.Context) {
+	tokenString, _ := c.Cookie("token")
 
+	role, err := service.GetCurrentUserRole(tokenString)
+
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if role != models.RoleAdmin {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "you are not an admin"})
+		return
+	}
+	c.Next()
 }
 
 func Member(c *gin.Context) {
 	tokenString, _ := c.Cookie("token")
 
-	fmt.Println("token:" + tokenString)
 	role, err := service.GetCurrentUserRole(tokenString)
-	if err != nil || role == models.RoleNone {
-		c.AbortWithStatus(http.StatusUnauthorized)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if role == models.RoleNone {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "you are not a member"})
 		return
 	}
 	c.Next()
