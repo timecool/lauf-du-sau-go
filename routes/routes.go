@@ -16,9 +16,14 @@ func Setup(router *gin.Engine) {
 	router.POST(user+"/login", controlles.Login)
 
 	router.GET(user+"/me", middleware.Member, controlles.Me)
+	router.GET(user+"/:uuid", middleware.Member, controlles.GetUser)
 	router.PATCH(user, middleware.Member, controlles.UpdateUser)
-	router.POST(user+"/run", middleware.Member, controlles.CreateRun)
+
+	// api/v1/user/run
 	router.GET(user+"/runs", middleware.Member, controlles.MyRuns)
+	router.GET(user+"/runs/:uuid", middleware.Member, controlles.RunsFromUser)
+
+	router.POST(user+"/run", middleware.Member, controlles.CreateRun)
 	router.DELETE(user+"/run/:uuid", middleware.Member, controlles.DeleteRun)
 
 	// api/v1/statistics

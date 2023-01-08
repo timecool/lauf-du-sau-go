@@ -110,3 +110,16 @@ func Me(c *gin.Context) {
 	result := service.UserToResultUser(user)
 	c.JSON(http.StatusOK, gin.H{"user": result})
 }
+
+func GetUser(c *gin.Context) {
+	userUuid := c.Param("uuid")
+
+	userCollection := database.InitUserCollection()
+	user, _, err := service.GetUserById(userUuid, userCollection)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	result := service.UserToResultUser(user)
+	c.JSON(http.StatusOK, gin.H{"user": result})
+}

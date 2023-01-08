@@ -127,16 +127,11 @@ func DeleteRun(c *gin.Context) {
 func MyRuns(c *gin.Context) {
 	userUuid, err := service.GetUserByToken(c)
 	month := c.Query("month")
-	date, err := time.Parse("2006-01", month)
+	firstOfMonth, lastOfMonth, err := service.GetFirstAndLastDayFromMonth(month)
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
-	currentYear, currentMonth, _ := date.Date()
-	currentLocation := date.Location()
-
-	firstOfMonth := time.Date(currentYear, currentMonth, 1, 0, 0, 0, 0, currentLocation)
-	lastOfMonth := firstOfMonth.AddDate(0, 1, -1)
 	userCollection := database.InitUserCollection()
 
 	o1 := bson.M{
@@ -176,4 +171,49 @@ func TestApi(c *gin.Context) {
 	service.OcrImage("https://www.runtastic.com/blog/wp-content/uploads/2018/03/iPhone-Xs-05_ShareImage_de.jpg")
 	c.JSON(http.StatusOK, gin.H{"message": "Run check"})
 
+}
+
+func RunsFromUser(c *gin.Context) {
+	userUuid := c.Param("uuid")
+
+	month := c.Query("month")
+	firstOfMonth, lastOfMonth, err := service.GetFirstAndLastDayFromMonth(month)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+
+	userCollection := database.InitUserCollection()
+
+	o1 := bson.M{
+		"$match": bson.M{"_id": userUuid},
+	}
+	o2 := bson.M{
+		"$unwind": "$runs",
+	}
+	o3 := bson.M{
+		"$match": bson.M{"runs.date": bson.M{
+			"$gte": firstOfMonth,
+			"$lte": lastOfMonth,
+		}},
+	}
+	o4 := bson.M{
+		"$group": bson.M{
+			"_id":  "$_id",
+			"runs": bson.M{"$push": "$runs"},
+		},
+	}
+
+	cursor, err := userCollection.Aggregate(database.Ctx, []bson.M{o1, o2, o3, o4})
+	var results []bson.M
+	if err = cursor.All(database.Ctx, &results); err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	if err := cursor.Close(database.Ctx); err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, results)
 }
