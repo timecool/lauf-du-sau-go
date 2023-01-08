@@ -4,27 +4,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"lauf-du-sau/database"
-	"lauf-du-sau/models"
 	"lauf-du-sau/service"
 	"net/http"
 )
-
-func ActivateUser(c *gin.Context) {
-
-	userUuid := c.Param("uuid")
-
-	userConnection := database.InitUserCollection()
-
-	update := bson.D{{"$set", bson.D{{"role", models.RoleMember}}}}
-
-	_, err := userConnection.UpdateByID(database.Ctx, userUuid, update)
-	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "Successfully User Activate"})
-}
 
 func UpdateUser(c *gin.Context) {
 	userUuid, err := service.GetUserByToken(c)

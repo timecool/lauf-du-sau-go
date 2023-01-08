@@ -8,6 +8,7 @@ import (
 
 const baseApiPattern = "/api/v1"
 const user = baseApiPattern + "/user"
+const runs = baseApiPattern + "/runs"
 const statistics = baseApiPattern + "/statistics"
 
 func Setup(router *gin.Engine) {
@@ -21,10 +22,15 @@ func Setup(router *gin.Engine) {
 
 	// api/v1/user/run
 	router.GET(user+"/runs", middleware.Member, controlles.MyRuns)
-	router.GET(user+"/runs/:uuid", middleware.Member, controlles.RunsFromUser)
 
 	router.POST(user+"/run", middleware.Member, controlles.CreateRun)
 	router.DELETE(user+"/run/:uuid", middleware.Member, controlles.DeleteRun)
+	router.PATCH(user+"/run/:uuid", middleware.Member, controlles.UpdateRun)
+
+	// api/v1/runs
+	router.GET(runs, middleware.Member, controlles.AllRuns)
+	router.GET(runs+"/:uuid", middleware.Member, controlles.RunsFromUser)
+	router.PATCH(runs+"/:uuid", middleware.Member, controlles.RunsFromUser)
 
 	// api/v1/statistics
 	router.GET(statistics+"/total-run", middleware.Member, controlles.TotalRun)
@@ -33,6 +39,8 @@ func Setup(router *gin.Engine) {
 	// only admin
 	router.PATCH(user+"/run/:uuid/status", middleware.Admin, controlles.ChangeRunStatus)
 	router.PATCH(user+"/:uuid/activate", middleware.Admin, controlles.ActivateUser)
+	router.PATCH(user+"/:uuid/reset-password", middleware.Admin, controlles.ResetPassword)
+	router.GET(runs+"/verify", middleware.Admin, controlles.VerifyRuns)
 
 	router.GET("/test", controlles.TestApi)
 	router.Static("/uploads", "./uploads")

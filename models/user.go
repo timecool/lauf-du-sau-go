@@ -19,6 +19,10 @@ type ReturnUser struct {
 	ImageUrl string  `json:"image_url" bson:"image_url"`
 }
 
+type ResetPassword struct {
+	Password string `bson:"password, omitempty"`
+}
+
 type Role string
 
 const (

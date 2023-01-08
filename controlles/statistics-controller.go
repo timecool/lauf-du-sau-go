@@ -42,13 +42,16 @@ func TotalRun(c *gin.Context) {
 		"$unwind": "$runs",
 	}
 	o2 := bson.M{
+		"$match": bson.M{"runs.status": models.RunActivate},
+	}
+	o3 := bson.M{
 		"$group": bson.M{
 			"_id":   "null",
 			"total": bson.M{"$sum": "$runs.distance"},
 		},
 	}
 
-	cursor, err := userCollection.Aggregate(database.Ctx, []bson.M{o1, o2})
+	cursor, err := userCollection.Aggregate(database.Ctx, []bson.M{o1, o2, o3})
 
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
@@ -65,6 +68,6 @@ func TotalRun(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, results[0])
+	c.JSON(http.StatusOK, results)
 
 }

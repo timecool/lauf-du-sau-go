@@ -13,6 +13,9 @@ func GetAllTimeLeaderboard(userCollection *mongo.Collection) ([]models.Leaderboa
 		"$unwind": "$runs",
 	}
 	o2 := bson.M{
+		"$match": bson.M{"runs.status": models.RunActivate},
+	}
+	o3 := bson.M{
 		"$group": bson.M{
 			"_id":       "$_id",
 			"username":  bson.M{"$first": "$username"},
@@ -22,7 +25,7 @@ func GetAllTimeLeaderboard(userCollection *mongo.Collection) ([]models.Leaderboa
 		},
 	}
 
-	cursor, err := userCollection.Aggregate(database.Ctx, []bson.M{o1, o2})
+	cursor, err := userCollection.Aggregate(database.Ctx, []bson.M{o1, o2, o3})
 
 	if err != nil {
 		return results, err
@@ -48,12 +51,15 @@ func GetMonthLeaderboard(userCollection *mongo.Collection, month string) ([]mode
 		"$unwind": "$runs",
 	}
 	o2 := bson.M{
+		"$match": bson.M{"runs.status": models.RunActivate},
+	}
+	o3 := bson.M{
 		"$match": bson.M{"runs.date": bson.M{
 			"$gte": firstOfMonth,
 			"$lte": lastOfMonth,
 		}},
 	}
-	o3 := bson.M{
+	o4 := bson.M{
 		"$group": bson.M{
 			"_id":       "$_id",
 			"username":  bson.M{"$first": "$username"},
@@ -63,7 +69,7 @@ func GetMonthLeaderboard(userCollection *mongo.Collection, month string) ([]mode
 		},
 	}
 
-	cursor, err := userCollection.Aggregate(database.Ctx, []bson.M{o1, o2, o3})
+	cursor, err := userCollection.Aggregate(database.Ctx, []bson.M{o1, o2, o3, o4})
 
 	if err != nil {
 		return results, err

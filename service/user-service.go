@@ -89,28 +89,10 @@ func GetCurrentUserRole(cookieToken string) (models.Role, error) {
 
 	// get token Claims
 	claims, ok := token.Claims.(jwt.MapClaims)
-	fmt.Println(claims)
 	if ok && token.Valid {
 		return models.Role(claims["role"].(string)), nil
 	}
 	return models.RoleNone, nil
-}
-
-func GetCurrentUserEmail(cookieToken string) (string, error) {
-	token, err := isTokenValid(cookieToken)
-
-	if err != nil {
-		fmt.Println(err)
-		return "", err
-	}
-
-	// get token Claims
-	claims, ok := token.Claims.(jwt.MapClaims)
-	fmt.Println(claims)
-	if ok && token.Valid {
-		return claims["email"].(string), nil
-	}
-	return "", nil
 }
 
 func GetCurrentUserUuid(cookieToken string) (string, error) {
@@ -134,7 +116,7 @@ func GetUserByToken(c *gin.Context) (string, error) {
 	tokenString, _ := c.Cookie("token")
 
 	uuid, err := GetCurrentUserUuid(tokenString)
-	fmt.Println("uuid" + uuid)
+
 	return uuid, err
 
 }

@@ -19,7 +19,7 @@ func Register(c *gin.Context) {
 		return
 	}
 
-	if user.Email != "" && user.Username != "" && user.Password != "" {
+	if user.Email == "" || user.Username == "" || user.Password == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Please fill all fields"})
 		return
 	}
@@ -28,6 +28,11 @@ func Register(c *gin.Context) {
 	_, isEmailSet, _ := service.GetUserByEmail(user.Email, userConnection)
 	if isEmailSet {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Email already exists"})
+		return
+	}
+	_, isUserSet, _ := service.GetUserByUsername(user.Username, userConnection)
+	if isUserSet {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Username already exists"})
 		return
 	}
 

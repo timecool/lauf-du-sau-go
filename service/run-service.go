@@ -3,8 +3,11 @@ package service
 import (
 	"fmt"
 	"github.com/google/uuid"
+	"go.mongodb.org/mongo-driver/bson"
 	"io"
 	"io/ioutil"
+	"lauf-du-sau/database"
+	"lauf-du-sau/models"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -29,6 +32,37 @@ func SaveImage(header *multipart.FileHeader, file multipart.File, folder string)
 		return "", err
 	}
 	return filePath, nil
+}
+
+func GetUserFromRunUuid(uuid string) (string, error) {
+	userCollection := database.InitUserCollection()
+
+	o1 := bson.M{
+		"$unwind": "$runs",
+	}
+	o2 := bson.M{
+		"$match": bson.M{"runs._id": uuid},
+	}
+	o4 := bson.M{
+		"$group": bson.M{
+			"_id": "$_id",
+		},
+	}
+
+	cursor, err := userCollection.Aggregate(database.Ctx, []bson.M{o1, o2, o4})
+	var results []models.User
+	if err = cursor.All(database.Ctx, &results); err != nil {
+		return "", err
+	}
+	if err := cursor.Close(database.Ctx); err != nil {
+		return "", err
+	}
+
+	if len(results) == 1 {
+		return results[0].UUID, nil
+	}
+	return "", nil
+
 }
 
 func OcrImage(imageUrl string) {
