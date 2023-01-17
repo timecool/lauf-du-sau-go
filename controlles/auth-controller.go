@@ -2,13 +2,14 @@ package controlles
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"golang.org/x/crypto/bcrypt"
 	"lauf-du-sau/database"
 	"lauf-du-sau/models"
 	"lauf-du-sau/service"
 	"net/http"
 	"os"
+	"strings"
 )
 
 func Register(c *gin.Context) {
@@ -25,6 +26,11 @@ func Register(c *gin.Context) {
 	}
 
 	userConnection := database.InitUserCollection()
+	checkEmail := strings.HasSuffix(user.Email, "@byte5.de")
+	if !checkEmail {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Please use your work email"})
+		return
+	}
 	_, isEmailSet, _ := service.GetUserByEmail(user.Email, userConnection)
 	if isEmailSet {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Email already exists"})
@@ -39,16 +45,22 @@ func Register(c *gin.Context) {
 	// hash and salt the password
 	hashPassword, _ := bcrypt.GenerateFromPassword([]byte(user.Password), 14)
 	user.Password = string(hashPassword)
-	user.UserRole = models.RoleNone
-	// create uuid
-	user.UUID = uuid.New().String()
-	user.Runs = []models.Run{}
+	user.UserRole = models.RoleMember
+	user.ID = primitive.NewObjectID()
 
 	// save user in collection
-	if _, err2 := userConnection.InsertOne(database.Ctx, user); err2 != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err2.Error()})
+	_, err := userConnection.InsertOne(database.Ctx, user)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	// create a jwt
+	token, err := service.CreateToken(user)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	}
+	c.SetCookie("token", token, 1000*60*60*2, "/", os.Getenv("FRONTEND_URL"), false, true)
+
 	result := service.UserToResultUser(user)
 	c.JSON(http.StatusOK, gin.H{"message": "Successfully registered", "user": result})
 }
@@ -91,4 +103,11 @@ func Login(c *gin.Context) {
 	c.SetCookie("token", token, 1000*60*60*2, "/", os.Getenv("FRONTEND_URL"), false, true)
 	result := service.UserToResultUser(userInDatabase)
 	c.JSON(http.StatusOK, gin.H{"message": "Successfully registered", "user": result})
+}
+
+func Logout(c *gin.Context) {
+
+	c.SetCookie("token", "", -1000*60*60*2, "/", os.Getenv("FRONTEND_URL"), false, true)
+	c.JSON(http.StatusOK, gin.H{"message": "Successfully Logout"})
+
 }

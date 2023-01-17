@@ -45,3 +45,8 @@ func InitUserCollection() *mongo.Collection {
 	Ctx, _ = context.WithTimeout(context.Background(), 10*time.Second)
 	return DB.Collection("users")
 }
+
+func InitRunCollection() *mongo.Collection {
+	Ctx, _ = context.WithTimeout(context.Background(), 10*time.Second)
+	return DB.Collection("runs")
+}

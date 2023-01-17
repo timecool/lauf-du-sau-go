@@ -3,6 +3,7 @@ package controlles
 import (
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"golang.org/x/crypto/bcrypt"
 	"lauf-du-sau/database"
 	"lauf-du-sau/models"
@@ -11,30 +12,13 @@ import (
 	"time"
 )
 
-func ActivateUser(c *gin.Context) {
-
-	userUuid := c.Param("uuid")
-
-	userConnection := database.InitUserCollection()
-
-	update := bson.D{{"$set", bson.D{{"role", models.RoleMember}}}}
-
-	_, err := userConnection.UpdateByID(database.Ctx, userUuid, update)
-	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "Successfully User RunActivate"})
-}
-
 func ChangeRunStatus(c *gin.Context) {
-	userUuid, err := service.GetUserByToken(c)
+	user, err := service.GetUserByContext(c)
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
-	runUuid := c.Param("uuid")
+	id := c.Param("uuid")
 
 	var runStatus models.RunStatusResponse
 	if err := c.ShouldBindJSON(&runStatus); err != nil {
@@ -45,20 +29,26 @@ func ChangeRunStatus(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Status not valid"})
 		return
 	}
-
+	runId, err := primitive.ObjectIDFromHex(id)
 	query := bson.M{
-		"runs._id": runUuid,
+		"_id": runId,
 	}
 
 	update := bson.M{
 		"$set": bson.M{
-			"runs.$.status": runStatus.Status,
+			"status": runStatus.Status,
+		},
+		"$push": bson.M{
+			"messages": models.RunMessage{
+				CreateUserUuid: user.ID,
+				CreateAt:       time.Now(),
+				Message:        runStatus.Message},
 		},
 	}
 
-	userConnection := database.InitUserCollection()
+	runConnection := database.InitRunCollection()
 
-	result, err := userConnection.UpdateOne(database.Ctx, query, update)
+	result, err := runConnection.UpdateOne(database.Ctx, query, update)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -68,45 +58,16 @@ func ChangeRunStatus(c *gin.Context) {
 		return
 	}
 
-	if runStatus.Message != "" {
-		push := bson.M{"$push": bson.M{
-			"runs.$.messages": models.RunMessage{
-				CreateUserUuid: userUuid,
-				CreateAt:       time.Now(),
-				Message:        runStatus.Message},
-		}}
-		_, err = userConnection.UpdateOne(database.Ctx, query, push)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-	}
 	c.JSON(http.StatusOK, gin.H{"message": "Run was successfully edited"})
 
 }
 
 func VerifyRuns(c *gin.Context) {
-	userCollection := database.InitUserCollection()
+	runCollection := database.InitRunCollection()
 
-	o1 := bson.M{
-		"$unwind": "$runs",
-	}
-	o2 := bson.M{
-		"$match": bson.M{"runs.status": models.RunVerify},
-	}
-	o3 := bson.M{
-		"$group": bson.M{
-			"_id":       "$_id",
-			"username":  bson.M{"$first": "$username"},
-			"email":     bson.M{"$first": "$email"},
-			"image_url": bson.M{"$first": "$image_url"},
-			"runs":      bson.M{"$push": "$runs"},
-		},
-	}
-
-	cursor, err := userCollection.Aggregate(database.Ctx, []bson.M{o1, o2, o3})
-	var results []bson.M
-	if err = cursor.All(database.Ctx, &results); err != nil {
+	cursor, err := runCollection.Find(database.Ctx, bson.M{"status": models.RunVerify})
+	var runs []models.Run
+	if err = cursor.All(database.Ctx, &runs); err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
@@ -114,13 +75,19 @@ func VerifyRuns(c *gin.Context) {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
+	var results []models.RunResponse
+
+	for _, run := range runs {
+		results = append(results, service.FormatRun(run))
+	}
 
 	c.JSON(http.StatusOK, results)
 }
 
 func ResetPassword(c *gin.Context) {
-	userUuid := c.Param("uuid")
+	id := c.Param("uuid")
 
+	userId, err := primitive.ObjectIDFromHex(id)
 	var password models.ResetPassword
 	if err := c.ShouldBindJSON(&password); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -128,9 +95,9 @@ func ResetPassword(c *gin.Context) {
 	}
 	userCollection := database.InitUserCollection()
 	hashPassword, _ := bcrypt.GenerateFromPassword([]byte(password.Password), 14)
-	update := bson.D{{"$set", bson.M{"password": hashPassword}}}
+	update := bson.D{{"$set", bson.M{"password": string(hashPassword)}}}
 
-	result, err := userCollection.UpdateByID(database.Ctx, userUuid, update)
+	result, err := userCollection.UpdateByID(database.Ctx, userId, update)
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return

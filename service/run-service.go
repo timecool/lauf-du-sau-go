@@ -2,8 +2,10 @@ package service
 
 import (
 	"fmt"
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"io"
 	"io/ioutil"
 	"lauf-du-sau/database"
@@ -34,34 +36,19 @@ func SaveImage(header *multipart.FileHeader, file multipart.File, folder string)
 	return filePath, nil
 }
 
-func GetUserFromRunUuid(uuid string) (string, error) {
-	userCollection := database.InitUserCollection()
-
-	o1 := bson.M{
-		"$unwind": "$runs",
+func GetRun(id string) (models.Run, error) {
+	runCollection := database.InitRunCollection()
+	var run models.Run
+	objectId, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return models.Run{}, err
 	}
-	o2 := bson.M{
-		"$match": bson.M{"runs._id": uuid},
-	}
-	o4 := bson.M{
-		"$group": bson.M{
-			"_id": "$_id",
-		},
+	err = runCollection.FindOne(database.Ctx, bson.M{"_id": objectId}).Decode(&run)
+	if err != nil {
+		return models.Run{}, err
 	}
 
-	cursor, err := userCollection.Aggregate(database.Ctx, []bson.M{o1, o2, o4})
-	var results []models.User
-	if err = cursor.All(database.Ctx, &results); err != nil {
-		return "", err
-	}
-	if err := cursor.Close(database.Ctx); err != nil {
-		return "", err
-	}
-
-	if len(results) == 1 {
-		return results[0].UUID, nil
-	}
-	return "", nil
+	return run, nil
 
 }
 
@@ -85,5 +72,37 @@ func OcrImage(imageUrl string) {
 	fmt.Println(res)
 	fmt.Println(string(body))
 	fmt.Println("------------------------------------")
+
+}
+
+func HasPermission(runId string, c *gin.Context) (bool, models.Run) {
+	var run models.Run
+
+	user, err := GetUserByContext(c)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return false, run
+	}
+
+	dbRun, err := GetRun(runId)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return false, run
+	}
+	if dbRun.UserID != user.ID && user.UserRole != models.RoleAdmin {
+		c.JSON(http.StatusForbidden, gin.H{"error": "You are not allowed to delete this run"})
+		return false, run
+	}
+	return true, dbRun
+}
+
+func FormatRun(run models.Run) models.RunResponse {
+	var result models.RunResponse
+	user, _, _ := GetUserById(run.UserID.Hex())
+	result.User = UserToResultUser(user)
+	result.Run = run
+	result.Run.Url = os.Getenv("IMAGE_PATH") + run.Url
+
+	return result
 
 }

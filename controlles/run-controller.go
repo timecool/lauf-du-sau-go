@@ -2,8 +2,9 @@ package controlles
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"lauf-du-sau/database"
 	"lauf-du-sau/models"
 	"lauf-du-sau/service"
@@ -15,14 +16,14 @@ import (
 )
 
 func CreateRun(c *gin.Context) {
-	userUuid, err := service.GetUserByToken(c)
+	user, err := service.GetUserByContext(c)
 
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
 
-	folder := "uploads/" + userUuid + "/"
+	folder := "uploads/" + user.ID.Hex() + "/"
 	err = utils.CreateFolder(folder)
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
@@ -52,93 +53,76 @@ func CreateRun(c *gin.Context) {
 		return
 	}
 	dateForm := c.PostForm("date")
-	date, err := time.Parse("2006-01-02 15:04:05", dateForm)
+	date, err := time.Parse("2006-01-02", dateForm)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
 
 	run := models.Run{
-		UUID:     uuid.New().String(),
+		ID:       primitive.NewObjectID(),
+		UserID:   user.ID,
 		Distance: distance,
 		Time:     runTime,
 		Date:     date,
 		CreateAt: time.Now(),
-		Url:      os.Getenv("IMAGE_PATH") + filePath,
+		Url:      filePath,
 		Status:   models.RunVerify,
 		Messages: []models.RunMessage{},
 	}
 
-	userCollection := database.InitUserCollection()
-	change := bson.M{"$push": bson.M{"runs": run}}
-	_, err = userCollection.UpdateByID(database.Ctx, userUuid, change)
+	runCollection := database.InitRunCollection()
+	_, err = runCollection.InsertOne(database.Ctx, run)
 	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	c.JSON(http.StatusOK, gin.H{"run": run})
+	run.Url = os.Getenv("IMAGE_PATH") + filePath
+	c.JSON(http.StatusOK, run)
 }
 
 func DeleteRun(c *gin.Context) {
-	userUuid, err := service.GetUserByToken(c)
-	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
-		return
-	}
-	runUuid := c.Param("uuid")
 
-	userCollection := database.InitUserCollection()
-	change := bson.M{"$pull": bson.M{"runs": bson.M{"_id": runUuid}}}
-	result, err := userCollection.UpdateByID(database.Ctx, userUuid, change)
+	id := c.Param("uuid")
+	permission, run := service.HasPermission(id, c)
+	if !permission {
+		return
+	}
+	runCollection := database.InitRunCollection()
+
+	_, err := runCollection.DeleteOne(database.Ctx, bson.M{"_id": run.ID})
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
-	if result.MatchedCount == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Run was not found"})
-		return
-	}
-	if result.ModifiedCount == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Nothing deleted"})
-		return
-	}
+
 	c.JSON(http.StatusOK, gin.H{"message": "Run has been deleted"})
 
 }
 
 func MyRuns(c *gin.Context) {
-	userUuid, err := service.GetUserByToken(c)
+	user, err := service.GetUserByContext(c)
 	month := c.Query("month")
 	firstOfMonth, lastOfMonth, err := service.GetFirstAndLastDayFromMonth(month)
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
-	userCollection := database.InitUserCollection()
+	runCollection := database.InitRunCollection()
 
-	o1 := bson.M{
-		"$match": bson.M{"_id": userUuid},
-	}
-	o2 := bson.M{
-		"$unwind": "$runs",
-	}
-	o3 := bson.M{
-		"$match": bson.M{"runs.date": bson.M{
-			"$gte": firstOfMonth,
-			"$lte": lastOfMonth,
-		}},
-	}
-	o4 := bson.M{
-		"$group": bson.M{
-			"_id":  "$_id",
-			"runs": bson.M{"$push": "$runs"},
-		},
-	}
+	query := bson.M{"user_id": user.ID, "date": bson.M{
+		"$gte": firstOfMonth,
+		"$lte": lastOfMonth,
+	}}
 
-	cursor, err := userCollection.Aggregate(database.Ctx, []bson.M{o1, o2, o3, o4})
-	var results []bson.M
-	if err = cursor.All(database.Ctx, &results); err != nil {
+	cursor, err := runCollection.Find(database.Ctx, query)
+	var runs []models.Run
+	if err = cursor.All(database.Ctx, &runs); err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
@@ -147,7 +131,10 @@ func MyRuns(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, results)
+	for index, run := range runs {
+		runs[index].Url = os.Getenv("IMAGE_PATH") + run.Url
+	}
+	c.JSON(http.StatusOK, runs)
 }
 
 func TestApi(c *gin.Context) {
@@ -157,7 +144,7 @@ func TestApi(c *gin.Context) {
 }
 
 func RunsFromUser(c *gin.Context) {
-	userUuid := c.Param("uuid")
+	id := c.Param("uuid")
 
 	month := c.Query("month")
 	firstOfMonth, lastOfMonth, err := service.GetFirstAndLastDayFromMonth(month)
@@ -166,77 +153,13 @@ func RunsFromUser(c *gin.Context) {
 		return
 	}
 
-	userCollection := database.InitUserCollection()
-
-	o1 := bson.M{
-		"$match": bson.M{"_id": userUuid},
-	}
-	o2 := bson.M{
-		"$unwind": "$runs",
-	}
-	o3 := bson.M{
-		"$match": bson.M{"runs.status": models.RunActivate},
-	}
-	o4 := bson.M{
-		"$match": bson.M{"runs.date": bson.M{
-			"$gte": firstOfMonth,
-			"$lte": lastOfMonth,
-		}},
-	}
-	o5 := bson.M{
-		"$group": bson.M{
-			"_id":  "$_id",
-			"runs": bson.M{"$push": "$runs"},
-		},
-	}
-
-	cursor, err := userCollection.Aggregate(database.Ctx, []bson.M{o1, o2, o3, o4, o5})
-	var results []bson.M
-	if err = cursor.All(database.Ctx, &results); err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
-		return
-	}
-	if err := cursor.Close(database.Ctx); err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, results)
-}
-
-func AllRuns(c *gin.Context) {
-	month := c.Query("month")
-	firstOfMonth, lastOfMonth, err := service.GetFirstAndLastDayFromMonth(month)
-	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
-		return
-	}
-
-	userCollection := database.InitUserCollection()
-
-	o1 := bson.M{
-		"$unwind": "$runs",
-	}
-	o2 := bson.M{
-		"$match": bson.M{"runs.status": models.RunActivate},
-	}
-	o3 := bson.M{
-		"$match": bson.M{"runs.date": bson.M{
-			"$gte": firstOfMonth,
-			"$lte": lastOfMonth,
-		}},
-	}
-	o4 := bson.M{
-		"$group": bson.M{
-			"_id":       "$_id",
-			"username":  bson.M{"$first": "$username"},
-			"email":     bson.M{"$first": "$email"},
-			"image_url": bson.M{"$first": "$image_url"},
-			"runs":      bson.M{"$push": "$runs"},
-		},
-	}
-
-	cursor, err := userCollection.Aggregate(database.Ctx, []bson.M{o1, o2, o3, o4})
+	runCollection := database.InitRunCollection()
+	userId, _ := primitive.ObjectIDFromHex(id)
+	query := bson.M{"user_id": userId, "date": bson.M{
+		"$gte": firstOfMonth,
+		"$lte": lastOfMonth,
+	}}
+	cursor, err := runCollection.Find(database.Ctx, query)
 	var results []bson.M
 	if err = cursor.All(database.Ctx, &results); err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
@@ -251,39 +174,18 @@ func AllRuns(c *gin.Context) {
 }
 
 func UpdateRun(c *gin.Context) {
-	tokenString, _ := c.Cookie("token")
 
-	runUuid := c.Param("uuid")
+	id := c.Param("uuid")
 
-	userRole, err := service.GetCurrentUserRole(tokenString)
-	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
-		return
-	}
-	userUuid, err := service.GetCurrentUserUuid(tokenString)
-	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
-		return
-	}
-	runUserUuid, err := service.GetUserFromRunUuid(runUuid)
-	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
-		return
-	}
-	if runUserUuid == "" {
-		c.JSON(http.StatusBadGateway, gin.H{"error": "Run not found"})
-		return
-	}
-
-	if userRole == models.RoleMember && userUuid != runUserUuid {
-		c.JSON(http.StatusForbidden, gin.H{"error": "you have no rights to edit this run"})
+	permission, dbRun := service.HasPermission(id, c)
+	if !permission {
 		return
 	}
 	var filePath string
 	var updateFiles bson.D
 	file, header, err := c.Request.FormFile("file")
 	if err == nil {
-		folder := "uploads/" + runUserUuid + "/"
+		folder := "uploads/" + dbRun.UserID.String() + "/"
 		err = utils.CreateFolder(folder)
 		if err != nil {
 			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
@@ -296,7 +198,7 @@ func UpdateRun(c *gin.Context) {
 		}
 	}
 	if filePath != "" {
-		updateFiles = append(updateFiles, bson.E{Key: "runs.$.url", Value: filePath})
+		updateFiles = append(updateFiles, bson.E{Key: "url", Value: filePath})
 	}
 
 	distance := c.PostForm("distance")
@@ -306,7 +208,7 @@ func UpdateRun(c *gin.Context) {
 			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 			return
 		}
-		updateFiles = append(updateFiles, bson.E{Key: "runs.$.distance", Value: distanceFloat})
+		updateFiles = append(updateFiles, bson.E{Key: "distance", Value: distanceFloat})
 	}
 
 	runTime := c.PostForm("time")
@@ -316,34 +218,33 @@ func UpdateRun(c *gin.Context) {
 			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 			return
 		}
-		updateFiles = append(updateFiles, bson.E{Key: "runs.$.time", Value: timeFloat})
+		updateFiles = append(updateFiles, bson.E{Key: "time", Value: timeFloat})
 	}
 
 	date := c.PostForm("date")
 	if date != "" {
 		dateForm := c.PostForm("date")
-		date, err := time.Parse("2006-01-02 15:04:05", dateForm)
+		date, err := time.Parse("2006-01-02", dateForm)
 		if err != nil {
 			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 			return
 		}
-		updateFiles = append(updateFiles, bson.E{Key: "runs.$.date", Value: date})
+		updateFiles = append(updateFiles, bson.E{Key: "date", Value: date})
 	}
 
 	if len(updateFiles) <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Nothing set"})
 		return
 	}
-	updateFiles = append(updateFiles, bson.E{Key: "runs.$.status", Value: models.RunVerify})
+	updateFiles = append(updateFiles, bson.E{Key: "status", Value: models.RunVerify})
 
 	update := bson.M{"$set": updateFiles}
-
 	query := bson.M{
-		"runs._id": runUuid,
+		"_id": dbRun.ID,
 	}
-	userCollection := database.InitUserCollection()
+	runCollection := database.InitRunCollection()
 
-	result, err := userCollection.UpdateOne(database.Ctx, query, update)
+	result, err := runCollection.UpdateOne(database.Ctx, query, update)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -354,5 +255,30 @@ func UpdateRun(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Run was successfully edited"})
+}
 
+func NewRuns(c *gin.Context) {
+
+	runCollection := database.InitRunCollection()
+
+	findOptions := options.Find().SetSort(bson.D{{"date", -1}}).SetLimit(4)
+
+	cursor, err := runCollection.Find(database.Ctx, bson.M{}, findOptions)
+	var runs []models.Run
+	if err = cursor.All(database.Ctx, &runs); err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	if err := cursor.Close(database.Ctx); err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+
+	var results []models.RunResponse
+
+	for _, run := range runs {
+		results = append(results, service.FormatRun(run))
+	}
+
+	c.JSON(http.StatusOK, results)
 }

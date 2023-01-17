@@ -14,10 +14,12 @@ func Admin(c *gin.Context) {
 
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.Abort()
 		return
 	}
 	if role != models.RoleAdmin {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "you are not an admin"})
+		c.Abort()
 		return
 	}
 	c.Next()
@@ -29,10 +31,12 @@ func Member(c *gin.Context) {
 	role, err := service.GetCurrentUserRole(tokenString)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.Abort()
 		return
 	}
 	if role == models.RoleNone {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "you are not a member"})
+		c.Abort()
 		return
 	}
 	c.Next()

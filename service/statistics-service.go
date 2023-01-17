@@ -2,30 +2,26 @@ package service
 
 import (
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
 	"lauf-du-sau/database"
 	"lauf-du-sau/models"
 )
 
-func GetAllTimeLeaderboard(userCollection *mongo.Collection) ([]models.LeaderboardUser, error) {
-	var results []models.LeaderboardUser
+func GetAllTimeLeaderboard() ([]models.LeaderboardUserID, error) {
+	var results []models.LeaderboardUserID
+
 	o1 := bson.M{
-		"$unwind": "$runs",
+		"$match": bson.M{"status": models.RunActivate},
 	}
+
 	o2 := bson.M{
-		"$match": bson.M{"runs.status": models.RunActivate},
-	}
-	o3 := bson.M{
 		"$group": bson.M{
-			"_id":       "$_id",
-			"username":  bson.M{"$first": "$username"},
-			"email":     bson.M{"$first": "$email"},
-			"image_url": bson.M{"$first": "$image_url"},
-			"total":     bson.M{"$sum": "$runs.distance"},
+			"_id":   "$user_id",
+			"total": bson.M{"$sum": "$distance"},
 		},
 	}
 
-	cursor, err := userCollection.Aggregate(database.Ctx, []bson.M{o1, o2, o3})
+	runCollection := database.InitRunCollection()
+	cursor, err := runCollection.Aggregate(database.Ctx, []bson.M{o1, o2})
 
 	if err != nil {
 		return results, err
@@ -36,40 +32,35 @@ func GetAllTimeLeaderboard(userCollection *mongo.Collection) ([]models.Leaderboa
 		return results, err
 
 	}
-
 	if err := cursor.Close(database.Ctx); err != nil {
 		return results, err
 	}
+
 	return results, nil
 
 }
-func GetMonthLeaderboard(userCollection *mongo.Collection, month string) ([]models.LeaderboardUser, error) {
-	var results []models.LeaderboardUser
+func GetMonthLeaderboard(month string) ([]models.LeaderboardUserID, error) {
+	var results []models.LeaderboardUserID
 	firstOfMonth, lastOfMonth, err := GetFirstAndLastDayFromMonth(month)
 
 	o1 := bson.M{
-		"$unwind": "$runs",
+		"$match": bson.M{"status": models.RunActivate},
 	}
 	o2 := bson.M{
-		"$match": bson.M{"runs.status": models.RunActivate},
-	}
-	o3 := bson.M{
-		"$match": bson.M{"runs.date": bson.M{
+		"$match": bson.M{"date": bson.M{
 			"$gte": firstOfMonth,
 			"$lte": lastOfMonth,
 		}},
 	}
-	o4 := bson.M{
+	o3 := bson.M{
 		"$group": bson.M{
-			"_id":       "$_id",
-			"username":  bson.M{"$first": "$username"},
-			"email":     bson.M{"$first": "$email"},
-			"image_url": bson.M{"$first": "$image_url"},
-			"total":     bson.M{"$sum": "$runs.distance"},
+			"_id":   "$user_id",
+			"total": bson.M{"$sum": "$distance"},
 		},
 	}
 
-	cursor, err := userCollection.Aggregate(database.Ctx, []bson.M{o1, o2, o3, o4})
+	runCollection := database.InitRunCollection()
+	cursor, err := runCollection.Aggregate(database.Ctx, []bson.M{o1, o2, o3})
 
 	if err != nil {
 		return results, err
@@ -85,5 +76,4 @@ func GetMonthLeaderboard(userCollection *mongo.Collection, month string) ([]mode
 	}
 
 	return results, nil
-
 }

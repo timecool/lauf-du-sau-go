@@ -7,67 +7,71 @@ import (
 	"lauf-du-sau/models"
 	"lauf-du-sau/service"
 	"net/http"
-	"os"
 )
 
 func Leaderboard(c *gin.Context) {
 	month := c.Query("month")
-	userCollection := database.InitUserCollection()
-	var results []models.LeaderboardUser
+	var userIDS []models.LeaderboardUserID
 	var err error
 	if month == "" {
-		results, err = service.GetAllTimeLeaderboard(userCollection)
+		userIDS, err = service.GetAllTimeLeaderboard()
 
 	} else {
-		results, err = service.GetMonthLeaderboard(userCollection, month)
+		userIDS, err = service.GetMonthLeaderboard(month)
 	}
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
-
-	for index, element := range results {
-		if element.ImageUrl != "" {
-			results[index].ImageUrl = os.Getenv("IMAGE_PATH") + element.ImageUrl
-
-		}
+	var results []models.LeaderboardUser
+	for _, element := range userIDS {
+		user, _, _ := service.GetUserById(element.UserID)
+		resultUser := service.UserToResultUser(user)
+		results = append(results, models.LeaderboardUser{User: resultUser, Total: service.ToFixed(element.Total, 2)})
 	}
 
 	c.JSON(http.StatusOK, results)
 }
 
-func TotalRun(c *gin.Context) {
-	userCollection := database.InitUserCollection()
+func GetTotal(c *gin.Context) {
+	user, err := service.GetUserByContext(c)
+
+	var results []models.LeaderboardUserID
+
 	o1 := bson.M{
-		"$unwind": "$runs",
+		"$match": bson.M{"status": models.RunActivate, "user_id": user.ID},
 	}
+
 	o2 := bson.M{
-		"$match": bson.M{"runs.status": models.RunActivate},
-	}
-	o3 := bson.M{
 		"$group": bson.M{
-			"_id":   "null",
-			"total": bson.M{"$sum": "$runs.distance"},
+			"_id":   "$user_id",
+			"total": bson.M{"$sum": "$distance"},
 		},
 	}
 
-	cursor, err := userCollection.Aggregate(database.Ctx, []bson.M{o1, o2, o3})
+	runCollection := database.InitRunCollection()
+	cursor, err := runCollection.Aggregate(database.Ctx, []bson.M{o1, o2})
 
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
+
 	}
 
-	var results []bson.M
 	if err = cursor.All(database.Ctx, &results); err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
+
 	}
 	if err := cursor.Close(database.Ctx); err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, results)
+	if len(results) > 0 {
+		totalResult := results[0]
+		totalResult.Total = service.ToFixed(totalResult.Total, 2)
+		c.JSON(http.StatusOK, totalResult)
+	}
 
 }
