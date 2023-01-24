@@ -11,6 +11,7 @@ import (
 	"lauf-du-sau/database"
 	"lauf-du-sau/models"
 	"mime/multipart"
+	"net/http"
 	"os"
 	"path/filepath"
 	"time"
@@ -61,6 +62,19 @@ func CreateToken(user models.User) (string, error) {
 	}
 
 	return token, nil
+}
+
+func CreateCookie(token string, time int) http.Cookie {
+	var cookie http.Cookie
+	cookie.Name = "token"
+	cookie.Value = token
+	cookie.Secure = true
+	cookie.Path = "/"
+	cookie.Domain = os.Getenv("FRONTEND_URL")
+	cookie.HttpOnly = true
+	cookie.SameSite = 4
+	cookie.MaxAge = time
+	return cookie
 }
 
 func isTokenValid(cookieToken string) (*jwt.Token, error) {

@@ -8,7 +8,6 @@ import (
 	"lauf-du-sau/models"
 	"lauf-du-sau/service"
 	"net/http"
-	"os"
 	"strings"
 )
 
@@ -59,7 +58,10 @@ func Register(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	}
-	c.SetCookie("token", token, 1000*60*60*2, "/", os.Getenv("FRONTEND_URL"), false, true)
+
+	cookie := service.CreateCookie(token, 1000*60*60*2)
+	http.SetCookie(c.Writer, &cookie)
+	c.Redirect(http.StatusMovedPermanently, "/")
 
 	result := service.UserToResultUser(user)
 	c.JSON(http.StatusOK, gin.H{"message": "Successfully registered", "user": result})
@@ -100,14 +102,19 @@ func Login(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	}
-	c.SetCookie("token", token, 1000*60*60*2, "/", os.Getenv("FRONTEND_URL"), false, true)
+
+	cookie := service.CreateCookie(token, 1000*60*60*2)
+	http.SetCookie(c.Writer, &cookie)
+	c.Redirect(http.StatusMovedPermanently, "/")
+
 	result := service.UserToResultUser(userInDatabase)
 	c.JSON(http.StatusOK, gin.H{"message": "Successfully registered", "user": result})
 }
 
 func Logout(c *gin.Context) {
+	cookie := service.CreateCookie("", -1)
+	http.SetCookie(c.Writer, &cookie)
+	c.Redirect(http.StatusMovedPermanently, "/")
 
-	c.SetCookie("token", "", -1000*60*60*2, "/", os.Getenv("FRONTEND_URL"), false, true)
 	c.JSON(http.StatusOK, gin.H{"message": "Successfully Logout"})
-
 }

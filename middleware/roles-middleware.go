@@ -13,7 +13,7 @@ func Admin(c *gin.Context) {
 	role, err := service.GetCurrentUserRole(tokenString)
 
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		c.Abort()
 		return
 	}
@@ -30,7 +30,7 @@ func Member(c *gin.Context) {
 
 	role, err := service.GetCurrentUserRole(tokenString)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		c.Abort()
 		return
 	}
