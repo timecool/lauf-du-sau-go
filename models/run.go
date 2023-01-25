@@ -40,3 +40,9 @@ type RunResponse struct {
 	Run  Run        `json:"run"`
 	User ReturnUser `json:"user"`
 }
+
+type RunsGroupByDay struct {
+	Date  time.Time `json:"date" bson:"_id, omitempty"`
+	Total float64   `json:"total" bson:"total, omitempty"`
+	Runs  []Run     `json:"runs" bson:"runs, omitempty"`
+}

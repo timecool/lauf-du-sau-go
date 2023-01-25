@@ -75,3 +75,49 @@ func GetTotal(c *gin.Context) {
 	}
 
 }
+
+func GetRunsGroupByDay(c *gin.Context) {
+	month := c.Query("month")
+	user, err := service.GetUserByContext(c)
+
+	var results []models.RunsGroupByDay
+	firstOfMonth, lastOfMonth, err := service.GetFirstAndLastDayFromMonth(month)
+
+	o1 := bson.M{
+		"$match": bson.M{"user_id": user.ID},
+	}
+	o2 := bson.M{
+		"$match": bson.M{"date": bson.M{
+			"$gte": firstOfMonth,
+			"$lte": lastOfMonth,
+		}},
+	}
+	o3 := bson.M{
+		"$group": bson.M{
+			"_id":   "$date",
+			"total": bson.M{"$sum": "$distance"},
+			"runs":  bson.M{"$push": "$$ROOT"},
+		},
+	}
+
+	runCollection := database.InitRunCollection()
+	cursor, err := runCollection.Aggregate(database.Ctx, []bson.M{o1, o2, o3})
+
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err = cursor.All(database.Ctx, &results); err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	if err := cursor.Close(database.Ctx); err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, results)
+	return
+
+}

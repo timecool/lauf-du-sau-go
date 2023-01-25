@@ -23,6 +23,7 @@ func Setup(router *gin.Engine) {
 	router.PATCH(user, middleware.Member, controlles.UpdateUser)
 
 	router.GET(user+"/runs", middleware.Member, controlles.MyRuns)
+	router.GET(user+"/runs/group", middleware.Member, controlles.GetRunsGroupByDay)
 
 	// api/v1/user/run
 	router.POST(user+"/run", middleware.Member, controlles.CreateRun)
