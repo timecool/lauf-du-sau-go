@@ -21,6 +21,7 @@ func Setup(router *gin.Engine) {
 	router.GET(user+"/me", middleware.Member, controlles.Me)
 	router.GET(user+"/:uuid", middleware.Member, controlles.GetUser)
 	router.PATCH(user, middleware.Member, controlles.UpdateUser)
+	router.DELETE(user+"/image", middleware.Member, controlles.DeleteUserImage)
 
 	router.GET(user+"/runs", middleware.Member, controlles.MyRuns)
 	router.GET(user+"/runs/group", middleware.Member, controlles.GetRunsGroupByDay)

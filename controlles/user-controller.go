@@ -72,6 +72,25 @@ func UpdateUser(c *gin.Context) {
 	result := service.UserToResultUser(user)
 	c.JSON(http.StatusOK, gin.H{"user": result})
 }
+func DeleteUserImage(c *gin.Context) {
+	user, err := service.GetUserByContext(c)
+
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+
+	userCollection := database.InitUserCollection()
+	update := bson.D{{"$set", bson.M{"image_url": ""}}}
+	_, err = userCollection.UpdateByID(database.Ctx, user.ID, update)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	user.ImageUrl = ""
+	result := service.UserToResultUser(user)
+	c.JSON(http.StatusOK, gin.H{"user": result})
+}
 
 func Me(c *gin.Context) {
 	user, err := service.GetUserByContext(c)
